@@ -12,7 +12,9 @@ const chatRoutes = require('./Routers/message.routes')
 
 const app = express()
 
-app.use(cors())
+app.use(cors({
+    origin: ['http://localhost:3000','http://localhost:5173','https://chatter-kid.netlify.app'],
+}))
 app.use(express.json())
 
 
