@@ -16,7 +16,7 @@ const register = async (req,res)=>{
                 }
             try {
                 const hashedPassword = await bcrypt.hash(password, 9);
-                const avatar = `https://avatar.iran.liara.run/public/${gender==male?'boy':girl}?${userName}`
+                const avatar = `https://avatar.iran.liara.run/public/${gender=='male'?'boy':girl}?${userName}`
                 const newUser = new User({
                     userName , fullName , password : hashedPassword , gender,avatar
                 })
