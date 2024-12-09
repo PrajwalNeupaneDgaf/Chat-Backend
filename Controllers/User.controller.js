@@ -10,11 +10,6 @@ const register = async (req,res)=>{
         if(password !== confirmPassword){
             return res.status(400).json({error : "Passwords do not match"})
             }
-            if(userName.length>14 ){
-                return res.status(500).json({
-                    error:"Username Should be Less than 15 letter"
-                })
-            }
             const existingUser = await User.findOne({userName});
             if(existingUser){
                 return res.status(400).json({error : "User already exists"})
