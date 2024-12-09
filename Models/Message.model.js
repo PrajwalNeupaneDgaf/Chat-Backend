@@ -4,7 +4,8 @@ const messageSchema = new mongoose.Schema({
   sender: { type: mongoose.Schema.Types.ObjectId, ref: "User", required: true },
   receiver: { type: mongoose.Schema.Types.ObjectId, ref: "User", required: true },
   content: { type: String, required: true },
-  timestamp: { type: String, default: Date.now },
+  timestamp: { type: Date, default: Date.now },
+  read: { type: Boolean, default: false },
   deletedBy: [{ type: mongoose.Schema.Types.ObjectId, ref: "User" ,default:[]}], 
 },{
   timestamps: true

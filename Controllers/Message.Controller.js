@@ -1,42 +1,59 @@
 const Message = require("../Models/Message.model")
-const User = require("../Models/User.model")
+const User = require("../Models/User.model");
+const { getReceiverId ,io } = require("../Utils/Socket.io");
+
 
 const getMyChatList = async (req, res) => {
-    try {
-      const myMessages = await Message.find({
-        $or: [
-          { sender: req.user._id },
-          { receiver: req.user._id }
-        ]
-      }).populate({
+  try {
+    // Fetch all messages where the user is involved (either sender or receiver)
+    const myMessages = await Message.find({
+      $or: [
+        { sender: req.user._id },
+        { receiver: req.user._id }
+      ]
+    })
+      .populate({
         path: "sender receiver",
         select: "_id userName fullName avatar"
-      });
-  
-      const usersSet = new Set();
-  
-      myMessages.forEach((message) => {
-        const otherUser = message.sender._id.toString() === req.user._id.toString()
-          ? message.receiver
-          : message.sender;
-  
-        // Add user details to the set
-        usersSet.add(otherUser._id.toString());
-      });
-  
-      // Map through the unique user IDs and extract user information
-      const uniqueChatUsers = await User.find({
-        _id: { $in: Array.from(usersSet) }
-      }).select("_id userName fullName avatar timestamp");
-  
-      res.status(200).json({
-        chatList: uniqueChatUsers,
-      });
-    } catch (error) {
-      console.error("Error fetching chat list:", error);
-      res.status(500).json({ error: "Something went wrong while fetching chat list." });
-    }
-  };
+      })
+      .sort({ timestamp: -1 }); // Sort by most recent messages first
+
+    // Group latest message by unique user (conversation partner)
+    const latestMessagesMap = new Map();
+
+    myMessages.forEach((message) => {
+      const otherUserId = message.sender._id.toString() === req.user._id.toString()
+        ? message.receiver._id.toString()
+        : message.sender._id.toString();
+
+      // Update latest message only if not already stored
+      if (!latestMessagesMap.has(otherUserId)) {
+        latestMessagesMap.set(otherUserId, {
+          user: message.sender._id.toString() === req.user._id.toString()
+            ? message.receiver
+            : message.sender,
+          latestMessage: {
+            content: message.content,
+            timestamp: message.timestamp,
+          },
+        });
+      }
+    });
+
+    // Convert map values to array and sort them by timestamp descending
+    const latestMessagesList = Array.from(latestMessagesMap.values()).sort(
+      (a, b) => b.latestMessage.timestamp - a.latestMessage.timestamp
+    );
+
+    res.status(200).json({
+      chatList: latestMessagesList,
+    });
+  } catch (error) {
+    console.error("Error fetching chat list:", error);
+    res.status(500).json({ error: "Something went wrong while fetching chat list." });
+  }
+};
+
   
   const myMessages = async (req,res)=>{
     const {userId} = req.params;
@@ -46,32 +63,42 @@ const getMyChatList = async (req, res) => {
             { sender: req.user._id ,receiver:userId }
         ]
     }).sort({ timestamp: 1 });
+    const sendMessage = messages.filter(msg => msg?.deletedBy[0]!= req.user._id);
+    
     return res.status(200).json({
-        messages
+      sendMessage
     })
   }
 
-  const SendMesage = async (req,res)=>{
-    const {to} = req.params;
-    const {message} = req.body;
-    const date = new Date()
-    let hours = date.getHours();
-    const minutes = date.getMinutes().toString().padStart(2, '0');
-    const ampm = hours >= 12 ? 'PM' : 'AM';
-    hours = hours % 12 || 12; // Convert to 12-hour format
-    const newDate = `${hours}:${minutes} ${ampm}`;
-    const newMessage = new Message({
-        sender:req.user._id ,
-        receiver:to ,
-        content:message ,
-        timestamp:newDate
-        });
-        await newMessage.save();
-        res.status(200).json({
-          message:"Message sent successfully",
-          })
+  const SendMesage = async (req, res) => {
+    const { to } = req.params;
+    const { message } = req.body;
+  
+    try {
+      const newMessage = new Message({
+        sender: req.user._id,
+        receiver: to,
+        content: message,
+        timestamp: Date.now(),
+      }); 
+        const receiverSocketId = getReceiverId([to]);
+        if (receiverSocketId) {
+          io.to(receiverSocketId).emit("Message", newMessage);
+        }
 
-  }
+
+      const savedMessage = await newMessage.save();
+
+      res.status(200).json({
+        message: "Message sent successfully",
+        data: savedMessage,
+      });
+    } catch (error) {
+      console.error("Error sending message", error);
+      res.status(500).json({ error: "Failed to send message" });
+    }
+  };
+  
 
   const deleteChat = async( req,res)=>{
     try {
@@ -92,7 +119,6 @@ const getMyChatList = async (req, res) => {
     
         // Update all found messages with the soft-delete logic
         for (let msg of messages) {
-          // Only add to deletedBy if not already added
           if (!msg.deletedBy.includes(currentUserId)) {
             msg.deletedBy.push(currentUserId);
             await msg.save();
