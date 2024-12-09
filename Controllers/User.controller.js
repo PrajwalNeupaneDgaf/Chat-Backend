@@ -10,13 +10,18 @@ const register = async (req,res)=>{
         if(password !== confirmPassword){
             return res.status(400).json({error : "Passwords do not match"})
             }
+            if(userName.length>14 ){
+                return res.status(500).json({
+                    error:"Username Should be Less than 15 letter"
+                })
+            }
             const existingUser = await User.findOne({userName});
             if(existingUser){
                 return res.status(400).json({error : "User already exists"})
                 }
             try {
                 const hashedPassword = await bcrypt.hash(password, 9);
-                const avatar = `https://api.multiavatar.com/${userName}.svg`
+                const avatar = `https://avatar.iran.liara.run/public/${gender==male?'boy':girl}?${userName}`
                 const newUser = new User({
                     userName , fullName , password : hashedPassword , gender,avatar
                 })
