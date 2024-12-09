@@ -30,7 +30,7 @@ const register = async (req,res)=>{
             } catch (error) {
                 console.log(error) //I will delete at the end
                 return res.status(400).json({
-                    error : "Error creating user",
+                    error : error ||"Error creating user",
                     log:error
                 })
             }
